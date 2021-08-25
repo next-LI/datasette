@@ -231,8 +231,13 @@ class Datasette:
         # memory_name is a random string so that each Datasette instance gets its own
         # unique in-memory named database - otherwise unit tests can fail with weird
         # errors when different instances accidentally share an in-memory database
+        if not os.path.exists("secrets"):
+            os.mkdir("secrets")
+        internal_path = os.path.join("secrets", "_internal.db")
+        conn = sqlite3.connect(internal_path)
         self.add_database(
-            Database(self, memory_name=secrets.token_hex()), name="_internal"
+            # Database(self, memory_name=secrets.token_hex()), name="_internal"
+            Database(self, path=internal_path, is_mutable=True), name="_internal",
         )
         self.internal_db_created = False
         for file in self.files:

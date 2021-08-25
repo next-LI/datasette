@@ -52,7 +52,7 @@ setup(
         "httpx>=0.17",
         "pint~=0.9",
         "pluggy~=0.13.0",
-        "uvicorn~=0.11",
+        "uvicorn==0.13.4",
         "aiofiles>=0.4,<0.8",
         "janus>=0.4,<0.7",
         "asgi-csrf>=0.9",

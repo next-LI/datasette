@@ -453,6 +453,7 @@ def serve(
     return_instance=False,
 ):
     """Serve up specified SQLite database files with a web UI"""
+
     if help_config:
         formatter = formatting.HelpFormatter()
         with formatter.section("Config options"):

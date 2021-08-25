@@ -5,7 +5,7 @@ async def init_internal_db(db):
     await db.execute_write(
         textwrap.dedent(
             """
-    CREATE TABLE databases (
+    CREATE TABLE  if not exists databases (
         database_name TEXT PRIMARY KEY,
         path TEXT,
         is_memory INTEGER,
@@ -18,7 +18,7 @@ async def init_internal_db(db):
     await db.execute_write(
         textwrap.dedent(
             """
-    CREATE TABLE tables (
+    CREATE TABLE  if not exists tables (
         database_name TEXT,
         table_name TEXT,
         rootpage INTEGER,
@@ -33,7 +33,7 @@ async def init_internal_db(db):
     await db.execute_write(
         textwrap.dedent(
             """
-    CREATE TABLE columns (
+    CREATE TABLE  if not exists columns (
         database_name TEXT,
         table_name TEXT,
         cid INTEGER,
@@ -54,7 +54,7 @@ async def init_internal_db(db):
     await db.execute_write(
         textwrap.dedent(
             """
-    CREATE TABLE indexes (
+    CREATE TABLE if not exists indexes (
         database_name TEXT,
         table_name TEXT,
         seq INTEGER,
@@ -73,7 +73,7 @@ async def init_internal_db(db):
     await db.execute_write(
         textwrap.dedent(
             """
-    CREATE TABLE foreign_keys (
+    CREATE TABLE if not exists  foreign_keys (
         database_name TEXT,
         table_name TEXT,
         id INTEGER,
