@@ -39,7 +39,7 @@ The next step is to create a virtual environment for your project and use it to 
     # Now activate the virtual environment, so pip can install into it
     source venv/bin/activate
     # Install Datasette and its testing dependencies
-    python3 -m pip install -e .[test]
+    python3 -m pip install -e '.[test]'
 
 That last line does most of the work: ``pip install -e`` means "install this package in a way that allows me to edit the source code in place". The ``.[test]`` option means "use the setup.py in this directory and install the optional testing dependencies as well".
 
@@ -201,6 +201,17 @@ For added productivity, you can use use `sphinx-autobuild <https://pypi.org/proj
     make livehtml
 
 Now browse to ``http://localhost:8000/`` to view the documentation. Any edits you make should be instantly reflected in your browser.
+
+.. _contributing_continuous_deployment:
+
+Continuously deployed demo instances
+------------------------------------
+
+The demo instance at `latest.datasette.io <https://latest.datasette.io/>`__ is re-deployed automatically to Google Cloud Run for every push to ``main`` that passes the test suite. This is implemented by the GitHub Actions workflow at `.github/workflows/deploy-latest.yml <https://github.com/simonw/datasette/blob/main/.github/workflows/deploy-latest.yml>`__.
+
+Specific branches can also be set to automatically deploy by adding them to the ``on: push: branches`` block at the top of the workflow YAML file. Branches configured in this way will be deployed to a new Cloud Run service whether or not their tests pass.
+
+The Cloud Run URL for a branch demo can be found in the GitHub Actions logs.
 
 .. _contributing_release:
 

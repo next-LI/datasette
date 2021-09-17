@@ -5,9 +5,12 @@ import json
 from markupsafe import Markup, escape
 from urllib.parse import parse_qsl, urlencode
 
+import markupsafe
+
 from datasette.utils import (
     await_me_maybe,
     check_visibility,
+    derive_named_parameters,
     to_css_class,
     validate_sql_select,
     is_url,
@@ -221,7 +224,9 @@ class QueryView(DataView):
             await self.check_permission(request, "execute-sql", database)
 
         # Extract any :named parameters
-        named_parameters = named_parameters or self.re_named_parameter.findall(sql)
+        named_parameters = named_parameters or await derive_named_parameters(
+            self.ds.get_database(database), sql
+        )
         named_parameter_values = {
             named_parameter: params.get(named_parameter) or ""
             for named_parameter in named_parameters
@@ -352,15 +357,20 @@ class QueryView(DataView):
                     display_value = value
                     # Let the plugins have a go
                     # pylint: disable=no-member
-                    plugin_value = pm.hook.render_cell(
+                    plugin_display_value = None
+                    for candidate in pm.hook.render_cell(
                         value=value,
                         column=column,
                         table=None,
                         database=database,
                         datasette=self.ds,
-                    )
-                    if plugin_value is not None:
-                        display_value = plugin_value
+                    ):
+                        candidate = await await_me_maybe(candidate)
+                        if candidate is not None:
+                            plugin_display_value = candidate
+                            break
+                    if plugin_display_value is not None:
+                        display_value = plugin_display_value
                     else:
                         if value in ("", None):
                             display_value = Markup("&nbsp;")
@@ -415,6 +425,29 @@ class QueryView(DataView):
                         }
                     )
                 )
+
+            show_hide_hidden = ""
+            if metadata.get("hide_sql"):
+                if bool(params.get("_show_sql")):
+                    show_hide_link = path_with_removed_args(request, {"_show_sql"})
+                    show_hide_text = "hide"
+                    show_hide_hidden = (
+                        '<input type="hidden" name="_show_sql" value="1">'
+                    )
+                else:
+                    show_hide_link = path_with_added_args(request, {"_show_sql": 1})
+                    show_hide_text = "show"
+            else:
+                if bool(params.get("_hide_sql")):
+                    show_hide_link = path_with_removed_args(request, {"_hide_sql"})
+                    show_hide_text = "show"
+                    show_hide_hidden = (
+                        '<input type="hidden" name="_hide_sql" value="1">'
+                    )
+                else:
+                    show_hide_link = path_with_added_args(request, {"_hide_sql": 1})
+                    show_hide_text = "hide"
+            hide_sql = show_hide_text == "show"
             return {
                 "display_rows": display_rows,
                 "custom_sql": True,
@@ -423,11 +456,12 @@ class QueryView(DataView):
                 "canned_query": canned_query,
                 "edit_sql_url": edit_sql_url,
                 "metadata": metadata,
-                "config": self.ds.config_dict(),
+                "settings": self.ds.settings_dict(),
                 "request": request,
-                "path_with_added_args": path_with_added_args,
-                "path_with_removed_args": path_with_removed_args,
-                "hide_sql": "_hide_sql" in params,
+                "show_hide_link": show_hide_link,
+                "show_hide_text": show_hide_text,
+                "show_hide_hidden": markupsafe.Markup(show_hide_hidden),
+                "hide_sql": hide_sql,
             }
 
         return (

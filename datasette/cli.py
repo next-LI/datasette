@@ -31,6 +31,14 @@ from .utils.sqlite import sqlite3
 from .utils.testing import TestClient
 from .version import __version__
 
+# Use Rich for tracebacks if it is installed
+try:
+    from rich.traceback import install
+
+    install(show_locals=True)
+except ImportError:
+    pass
+
 
 class Config(click.ParamType):
     # This will be removed in Datasette 1.0 in favour of class Setting
@@ -43,7 +51,7 @@ class Config(click.ParamType):
         name, value = config.split(":", 1)
         if name not in DEFAULT_SETTINGS:
             self.fail(
-                f"{name} is not a valid option (--help-config to see all)",
+                f"{name} is not a valid option (--help-settings to see all)",
                 param,
                 ctx,
             )
@@ -76,7 +84,7 @@ class Setting(CompositeParamType):
         name, value = config
         if name not in DEFAULT_SETTINGS:
             self.fail(
-                f"{name} is not a valid option (--help-config to see all)",
+                f"{name} is not a valid option (--help-settings to see all)",
                 param,
                 ctx,
             )
@@ -115,7 +123,11 @@ def sqlite_extensions(fn):
 @click.version_option(version=__version__)
 def cli():
     """
-    Datasette!
+    Datasette is an open source multi-tool for exploring and publishing data
+
+    \b
+    About Datasette: https://datasette.io/
+    Full documentation: https://docs.datasette.io/
     """
 
 
@@ -334,6 +346,10 @@ def uninstall(packages, yes):
     help="Port for server, defaults to 8001. Use -p 0 to automatically assign an available port.",
 )
 @click.option(
+    "--uds",
+    help="Bind to a Unix domain socket",
+)
+@click.option(
     "--reload",
     is_flag=True,
     help="Automatically reload if code or metadata change detected - useful for development",
@@ -396,7 +412,7 @@ def uninstall(packages, yes):
     help="Run an HTTP GET request against this path, print results and exit",
 )
 @click.option("--version-note", help="Additional note to show on /-/versions")
-@click.option("--help-config", is_flag=True, help="Show available config options")
+@click.option("--help-settings", is_flag=True, help="Show available settings")
 @click.option("--pdb", is_flag=True, help="Launch debugger on any errors")
 @click.option(
     "-o",
@@ -428,6 +444,7 @@ def serve(
     immutable,
     host,
     port,
+    uds,
     reload,
     cors,
     sqlite_extensions,
@@ -443,7 +460,7 @@ def serve(
     root,
     get,
     version_note,
-    help_config,
+    help_settings,
     pdb,
     open_browser,
     create,
@@ -453,9 +470,9 @@ def serve(
     return_instance=False,
 ):
     """Serve up specified SQLite database files with a web UI"""
-    if help_config:
+    if help_settings:
         formatter = formatting.HelpFormatter()
-        with formatter.section("Config options"):
+        with formatter.section("Settings"):
             formatter.write_dl(
                 [
                     (option.name, f"{option.help} (default={option.default})")
@@ -482,14 +499,14 @@ def serve(
     if metadata:
         metadata_data = parse_metadata(metadata.read())
 
-    combined_config = {}
+    combined_settings = {}
     if config:
         click.echo(
             "--config name:value will be deprecated in Datasette 1.0, use --setting name value instead",
             err=True,
         )
-        combined_config.update(config)
-    combined_config.update(settings)
+        combined_settings.update(config)
+    combined_settings.update(settings)
 
     kwargs = dict(
         immutables=immutable,
@@ -501,7 +518,7 @@ def serve(
         template_dir=template_dir,
         plugins_dir=plugins_dir,
         static_mounts=static,
-        config=combined_config,
+        settings=combined_settings,
         memory=memory,
         secret=secret,
         version_note=version_note,
@@ -569,11 +586,16 @@ def serve(
     uvicorn_kwargs = dict(
         host=host, port=port, log_level="info", lifespan="on", workers=1
     )
+    if uds:
+        uvicorn_kwargs["uds"] = uds
     if ssl_keyfile:
         uvicorn_kwargs["ssl_keyfile"] = ssl_keyfile
     if ssl_certfile:
         uvicorn_kwargs["ssl_certfile"] = ssl_certfile
     uvicorn.run(ds.app(), **uvicorn_kwargs)
+
+
+pm.hook.register_commands(cli=cli)
 
 
 async def check_databases(ds):

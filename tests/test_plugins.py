@@ -6,13 +6,15 @@ from .fixtures import (
     TEMP_PLUGIN_SECRET_FILE,
     TestClient as _TestClient,
 )  # noqa
+from click.testing import CliRunner
 from datasette.app import Datasette
-from datasette import cli
+from datasette import cli, hookimpl
 from datasette.plugins import get_plugins, DEFAULT_PLUGINS, pm
 from datasette.utils.sqlite import sqlite3
 from datasette.utils import CustomRow
 from jinja2.environment import Template
 import base64
+import importlib
 import json
 import os
 import pathlib
@@ -183,6 +185,14 @@ def test_hook_render_cell_demo(app_client):
         "database": "fixtures",
         "config": {"depth": "table", "special": "this-is-simple_primary_key"},
     } == json.loads(td.string)
+
+
+@pytest.mark.parametrize(
+    "path", ("/fixtures?sql=select+'RENDER_CELL_ASYNC'", "/fixtures/simple_primary_key")
+)
+def test_hook_render_cell_async(app_client, path):
+    response = app_client.get(path)
+    assert b"RENDER_CELL_ASYNC_RESULT" in response.body
 
 
 def test_plugin_config(app_client):
@@ -648,6 +658,25 @@ def test_hook_register_routes(app_client, path, body):
     assert body == response.text
 
 
+@pytest.mark.parametrize("configured_path", ("path1", "path2"))
+def test_hook_register_routes_with_datasette(configured_path):
+    with make_app_client(
+        metadata={
+            "plugins": {
+                "register-route-demo": {
+                    "path": configured_path,
+                }
+            }
+        }
+    ) as client:
+        response = client.get(f"/{configured_path}/")
+        assert response.status == 200
+        assert configured_path.upper() == response.text
+        # Other one should 404
+        other_path = [p for p in ("path1", "path2") if configured_path != p][0]
+        assert client.get(f"/{other_path}/").status == 404
+
+
 def test_hook_register_routes_post(app_client):
     response = app_client.post("/post/", {"this is": "post data"}, csrftoken_from=True)
     assert 200 == response.status
@@ -875,3 +904,56 @@ def test_hook_get_metadata(app_client):
     assert "Hello from local metadata" == meta["databases"]["from-local"]["title"]
     assert "Hello from the plugin hook" == meta["databases"]["from-hook"]["title"]
     pm.hook.get_metadata = og_pm_hook_get_metadata
+
+
+def _extract_commands(output):
+    lines = output.split("Commands:\n", 1)[1].split("\n")
+    return {line.split()[0].replace("*", "") for line in lines if line.strip()}
+
+
+def test_hook_register_commands():
+    # Without the plugin should have seven commands
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, "--help")
+    commands = _extract_commands(result.output)
+    assert commands == {
+        "serve",
+        "inspect",
+        "install",
+        "package",
+        "plugins",
+        "publish",
+        "uninstall",
+    }
+
+    # Now install a plugin
+    class VerifyPlugin:
+        __name__ = "VerifyPlugin"
+
+        @hookimpl
+        def register_commands(self, cli):
+            @cli.command()
+            def verify():
+                pass
+
+            @cli.command()
+            def unverify():
+                pass
+
+    pm.register(VerifyPlugin(), name="verify")
+    importlib.reload(cli)
+    result2 = runner.invoke(cli.cli, "--help")
+    commands2 = _extract_commands(result2.output)
+    assert commands2 == {
+        "serve",
+        "inspect",
+        "install",
+        "package",
+        "plugins",
+        "publish",
+        "uninstall",
+        "verify",
+        "unverify",
+    }
+    pm.unregister(name="verify")
+    importlib.reload(cli)

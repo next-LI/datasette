@@ -5,6 +5,7 @@ from .fixtures import (
     EXPECTED_PLUGINS,
 )
 import asyncio
+from datasette.app import SETTINGS
 from datasette.plugins import DEFAULT_PLUGINS
 from datasette.cli import cli, serve
 from datasette.version import __version__
@@ -132,6 +133,7 @@ def test_metadata_yaml():
         immutable=[],
         host="127.0.0.1",
         port=8001,
+        uds=None,
         reload=False,
         cors=False,
         sqlite_extensions=[],
@@ -146,7 +148,7 @@ def test_metadata_yaml():
         root=False,
         version_note=None,
         get=None,
-        help_config=False,
+        help_settings=False,
         pdb=False,
         crossdb=False,
         open_browser=False,
@@ -290,3 +292,10 @@ def test_weird_database_names(ensure_eventloop, tmpdir, filename):
         cli, [db_path, "--get", "/{}".format(urllib.parse.quote(filename_no_stem))]
     )
     assert result2.exit_code == 0, result2.output
+
+
+def test_help_settings():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help-settings"])
+    for setting in SETTINGS:
+        assert setting.name in result.output

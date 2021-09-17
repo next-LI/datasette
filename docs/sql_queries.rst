@@ -187,14 +187,28 @@ You can alternatively provide an explicit list of named parameters using the ``"
               order by neighborhood
             title: Search neighborhoods
 
-.. _canned_queries_default_fragment:
+.. _canned_queries_options:
 
-Setting a default fragment
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Additional canned query options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Additional options can be specified for canned queries in the YAML or JSON configuration.
+
+hide_sql
+++++++++
+
+Canned queries default to displaying their SQL query at the top of the page. If the query is extremely long you may want to hide it by default, with a "show" link that can be used to make it visible.
+
+Add the ``"hide_sql": true`` option to hide the SQL query by default.
+
+fragment
+++++++++
 
 Some plugins, such as `datasette-vega <https://github.com/simonw/datasette-vega>`__, can be configured by including additional data in the fragment hash of the URL - the bit that comes after a ``#`` symbol.
 
-You can set a default fragment hash that will be included in the link to the canned query from the database index page using the ``"fragment"`` key:
+You can set a default fragment hash that will be included in the link to the canned query from the database index page using the ``"fragment"`` key.
+
+This example demonstrates both ``fragment`` and ``hide_sql``:
 
 .. code-block:: json
 
@@ -204,7 +218,8 @@ You can set a default fragment hash that will be included in the link to the can
                 "queries": {
                     "neighborhood_search": {
                         "sql": "select neighborhood, facet_cities.name, state\nfrom facetable join facet_cities on facetable.city_id = facet_cities.id\nwhere neighborhood like '%' || :text || '%' order by neighborhood;",
-                        "fragment": "fragment-goes-here"
+                        "fragment": "fragment-goes-here",
+                        "hide_sql": true
                     }
                 }
             }
@@ -403,7 +418,7 @@ Datasette can execute joins across multiple databases if it is started with the 
 
 If it is started in this way, the ``/_memory`` page can be used to execute queries that join across multiple databases.
 
-References to tables in attached databases should be preceeded by the database name and a period.
+References to tables in attached databases should be preceded by the database name and a period.
 
 For example, this query will show a list of tables across both of the above databases:
 

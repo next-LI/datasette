@@ -4,21 +4,58 @@
 Changelog
 =========
 
-.. _v0_58a1:
+.. _v0_59a2:
 
-0.58a1 (2021-06-24)
+0.59a2 (2021-08-27)
 -------------------
 
+- Columns can now have associated metadata descriptions in ``metadata.json``, see :ref:`metadata_column_descriptions`. (:issue:`942`)
+- New :ref:`register_commands() <plugin_hook_register_commands>` plugin hook allows plugins to register additional Datasette CLI commands, e.g. ``datasette mycommand file.db``. (:issue:`1449`)
+- Adding ``?_facet_size=max`` to a table page now shows the number of unique values in each facet. (:issue:`1423`)
+- Code that figures out which named parameters a SQL query takes in order to display form fields for them is no longer confused by strings that contain colon characters. (:issue:`1421`)
+- Renamed ``--help-config`` option to ``--help-settings``. (:issue:`1431`)
+- ``datasette.databases`` property is now a documented API. (:issue:`1443`)
+- Datasette base template now wraps everything other than the ``<footer>`` in a ``<div class="not-footer">`` element, to help with advanced CSS customization. (:issue:`1446`)
+
+.. _v0_59a1:
+
+0.59a1 (2021-08-08)
+-------------------
+
+- The :ref:`render_cell() <plugin_hook_render_cell>` plugin hook can now return an awaitable function. This means the hook can execute SQL queries. (:issue:`1425`)
+
+.. _v0_59a0:
+
+0.59a0 (2021-08-06)
+-------------------
+
+- :ref:`plugin_register_routes` plugin hook now accepts an optional ``datasette`` argument. (:issue:`1404`)
+- New ``hide_sql`` canned query option for defaulting to hiding the SQL quey used by a canned query, see :ref:`canned_queries_options`. (:issue:`1422`)
+- New ``--cpu`` option for :ref:`datasette publish cloudrun <publish_cloud_run>`. (:issue:`1420`)
+- If `Rich <https://github.com/willmcgugan/rich>`__ is installed in the same virtual environment as Datasette, it will be used to provide enhanced display of error tracebacks on the console. (:issue:`1416`)
+- ``datasette.utils`` :ref:`internals_utils_parse_metadata` function, used by the new `datasette-remote-metadata plugin <https://datasette.io/plugins/datasette-remote-metadata>`__, is now a documented API. (:issue:`1405`)
+
+.. _v0_58_1:
+
+0.58.1 (2021-07-16)
+-------------------
+
+- Fix for an intermittent race condition caused by the ``refresh_schemas()`` internal function. (:issue:`1231`)
+
+.. _v0_58:
+
+0.58 (2021-07-14)
+-----------------
+
+- New ``datasette --uds /tmp/datasette.sock`` option for binding Datasette to a Unix domain socket, see :ref:`proxy documentation <deploying_proxy>` (:issue:`1388`)
+- ``"searchmode": "raw"`` table metadata option for defaulting a table to executing SQLite full-text search syntax without first escaping it, see :ref:`full_text_search_advanced_queries`. (:issue:`1389`)
+- New plugin hook: :ref:`plugin_hook_get_metadata`, for returning custom metadata for an instance, database or table. Thanks, Brandon Roberts! (:issue:`1384`)
 - New plugin hook: :ref:`plugin_hook_skip_csrf`, for opting out of CSRF protection based on the incoming request. (:issue:`1377`)
+- The :ref:`menu_links() <plugin_hook_menu_links>`, :ref:`table_actions() <plugin_hook_table_actions>` and :ref:`database_actions() <plugin_hook_database_actions>` plugin hooks all gained a new optional ``request`` argument providing access to the current request. (:issue:`1371`)
+- Major performance improvement for Datasette faceting. (:issue:`1394`)
+- Improved documentation for :ref:`deploying_proxy` to recommend using ``ProxyPreservehost On`` with Apache. (:issue:`1387`)
 - ``POST`` requests to endpoints that do not support that HTTP verb now return a 405 error.
 - ``db.path`` can now be provided as a ``pathlib.Path`` object, useful when writing unit tests for plugins. Thanks, Chris Amico. (:issue:`1365`)
-
-.. _v0_58a0:
-
-0.58a0 (2021-06-09)
--------------------
-
-- The :ref:`menu_links() <plugin_hook_menu_links>`, :ref:`table_actions() <plugin_hook_table_actions>` and :ref:`database_actions() <plugin_hook_database_actions>` plugin hooks all gained a new optional ``request`` argument providing access to the current request. (:issue:`1371`)
 
 .. _v0_57_1:
 
@@ -420,7 +457,7 @@ See also `Datasette 0.49: The annotated release notes <https://simonwillison.net
 - Datasette now has `a GitHub discussions forum <https://github.com/simonw/datasette/discussions>`__ for conversations about the project that go beyond just bug reports and issues.
 - Datasette can now be installed on macOS using Homebrew! Run ``brew install simonw/datasette/datasette``. See :ref:`installation_homebrew`. (:issue:`335`)
 - Two new commands: ``datasette install name-of-plugin`` and ``datasette uninstall name-of-plugin``. These are equivalent to ``pip install`` and ``pip uninstall`` but automatically run in the same virtual environment as Datasette, so users don't have to figure out where that virtual environment is - useful for installations created using Homebrew or ``pipx``. See :ref:`plugins_installing`. (:issue:`925`)
-- A new command-line option, ``datasette --get``, accepts a path to a URL within the Datasette instance. It will run that request through Datasette (without starting a web server) and print out the repsonse. See :ref:`getting_started_datasette_get` for an example. (:issue:`926`)
+- A new command-line option, ``datasette --get``, accepts a path to a URL within the Datasette instance. It will run that request through Datasette (without starting a web server) and print out the response. See :ref:`getting_started_datasette_get` for an example. (:issue:`926`)
 
 .. _v0_46:
 
@@ -494,7 +531,7 @@ New plugin hooks
 Smaller changes
 ~~~~~~~~~~~~~~~
 
-- Cascading view permissons - so if a user has ``view-table`` they can view the table page even if they do not have ``view-database`` or ``view-instance``. (:issue:`832`)
+- Cascading view permissions - so if a user has ``view-table`` they can view the table page even if they do not have ``view-database`` or ``view-instance``. (:issue:`832`)
 - CSRF protection no longer applies to ``Authentication: Bearer token`` requests or requests without cookies. (:issue:`835`)
 - ``datasette.add_message()`` now works inside plugins. (:issue:`864`)
 - Workaround for "Too many open files" error in test runs. (:issue:`846`)
@@ -668,7 +705,7 @@ The main focus of this release is a major upgrade to the :ref:`plugin_register_o
 * Visually distinguish float and integer columns - useful for figuring out why order-by-column might be returning unexpected results. (:issue:`729`)
 * The :ref:`internals_request`, which is passed to several plugin hooks, is now documented. (:issue:`706`)
 * New ``metadata.json`` option for setting a custom default page size for specific tables and views, see :ref:`metadata_page_size`. (:issue:`751`)
-* Canned queries can now be configured with a default URL fragment hash, useful when working with plugins such as `datasette-vega <https://github.com/simonw/datasette-vega>`__, see :ref:`canned_queries_default_fragment`. (:issue:`706`)
+* Canned queries can now be configured with a default URL fragment hash, useful when working with plugins such as `datasette-vega <https://github.com/simonw/datasette-vega>`__, see :ref:`canned_queries_options`. (:issue:`706`)
 * Fixed a bug in ``datasette publish`` when running on operating systems where the ``/tmp`` directory lives in a different volume, using a backport of the Python 3.8 ``shutil.copytree()`` function. (:issue:`744`)
 * Every plugin hook is now covered by the unit tests, and a new unit test checks that each plugin hook has at least one corresponding test. (:issue:`771`, :issue:`773`)
 
@@ -708,7 +745,7 @@ Also in this release:
 * Datasette now has a *pattern portfolio* at ``/-/patterns`` - e.g. https://latest.datasette.io/-/patterns. This is a page that shows every Datasette user interface component in one place, to aid core development and people building custom CSS themes. (:issue:`151`)
 * SQLite `PRAGMA functions <https://www.sqlite.org/pragma.html#pragfunc>`__ such as ``pragma_table_info(tablename)`` are now allowed in Datasette SQL queries. (:issue:`761`)
 * Datasette pages now consistently return a ``content-type`` of ``text/html; charset=utf-8"``. (:issue:`752`)
-* Datasette now handles an ASGI ``raw_path`` value of ``None``, which should allow compatibilty with the `Mangum <https://github.com/erm/mangum>`__ adapter for running ASGI apps on AWS Lambda. Thanks, Colin Dellow. (`#719 <https://github.com/simonw/datasette/pull/719>`__)
+* Datasette now handles an ASGI ``raw_path`` value of ``None``, which should allow compatibility with the `Mangum <https://github.com/erm/mangum>`__ adapter for running ASGI apps on AWS Lambda. Thanks, Colin Dellow. (`#719 <https://github.com/simonw/datasette/pull/719>`__)
 * Installation documentation now covers how to :ref:`installation_pipx`. (:issue:`756`)
 * Improved the documentation for :ref:`full_text_search`. (:issue:`748`)
 
@@ -1163,7 +1200,7 @@ Documentation improvements plus a fix for publishing to Zeit Now.
 New plugin hooks, improved database view support and an easier way to use more recent versions of SQLite.
 
 - New ``publish_subcommand`` plugin hook. A plugin can now add additional ``datasette publish`` publishers in addition to the default ``now`` and ``heroku``, both of which have been refactored into default plugins. :ref:`publish_subcommand documentation <plugin_hook_publish_subcommand>`. Closes :issue:`349`
-- New ``render_cell`` plugin hook. Plugins can now customize how values are displayed in the HTML tables produced by Datasette's browseable interface. `datasette-json-html <https://github.com/simonw/datasette-json-html>`__ and `datasette-render-images <https://github.com/simonw/datasette-render-images>`__ are two new plugins that use this hook. :ref:`render_cell documentation <plugin_hook_render_cell>`. Closes :issue:`352`
+- New ``render_cell`` plugin hook. Plugins can now customize how values are displayed in the HTML tables produced by Datasette's browsable interface. `datasette-json-html <https://github.com/simonw/datasette-json-html>`__ and `datasette-render-images <https://github.com/simonw/datasette-render-images>`__ are two new plugins that use this hook. :ref:`render_cell documentation <plugin_hook_render_cell>`. Closes :issue:`352`
 - New ``extra_body_script`` plugin hook, enabling plugins to provide additional JavaScript that should be added to the page footer. :ref:`extra_body_script documentation <plugin_hook_extra_body_script>`.
 - ``extra_css_urls`` and ``extra_js_urls`` hooks now take additional optional parameters, allowing them to be more selective about which pages they apply to. :ref:`Documentation <plugin_hook_extra_css_urls>`.
 - You can now use the :ref:`sortable_columns metadata setting <metadata_sortable_columns>` to explicitly enable sort-by-column in the interface for database views, as well as for specific tables.

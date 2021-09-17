@@ -20,7 +20,6 @@ from .fixtures import (  # noqa
     generate_compound_rows,
     generate_sortable_rows,
     make_app_client,
-    supports_generated_columns,
     EXPECTED_PLUGINS,
     METADATA,
 )
@@ -38,7 +37,7 @@ def test_homepage(app_client):
     assert response.json.keys() == {"fixtures": 0}.keys()
     d = response.json["fixtures"]
     assert d["name"] == "fixtures"
-    assert d["tables_count"] == 25 if supports_generated_columns() else 24
+    assert d["tables_count"] == 24
     assert len(d["tables_and_views_truncated"]) == 5
     assert d["tables_and_views_more"] is True
     # 4 hidden FTS tables + no_primary_key (hidden in metadata)
@@ -271,22 +270,7 @@ def test_database_page(app_client):
             },
             "private": False,
         },
-    ] + (
-        [
-            {
-                "columns": ["body", "id", "consideration"],
-                "count": 1,
-                "foreign_keys": {"incoming": [], "outgoing": []},
-                "fts_table": None,
-                "hidden": False,
-                "name": "generated_columns",
-                "primary_keys": [],
-                "private": False,
-            }
-        ]
-        if supports_generated_columns()
-        else []
-    ) + [
+    ] + [
         {
             "name": "infinity",
             "columns": ["value"],
@@ -431,7 +415,7 @@ def test_database_page(app_client):
             "name": "simple_primary_key",
             "columns": ["id", "content"],
             "primary_keys": ["id"],
-            "count": 4,
+            "count": 5,
             "hidden": False,
             "fts_table": None,
             "foreign_keys": {
@@ -668,6 +652,7 @@ def test_custom_sql(app_client):
         {"content": "world"},
         {"content": ""},
         {"content": "RENDER_CELL_DEMO"},
+        {"content": "RENDER_CELL_ASYNC"},
     ] == data["rows"]
     assert ["content"] == data["columns"]
     assert "fixtures" == data["database"]
@@ -709,6 +694,7 @@ def test_table_json(app_client):
         {"id": "2", "content": "world"},
         {"id": "3", "content": ""},
         {"id": "4", "content": "RENDER_CELL_DEMO"},
+        {"id": "5", "content": "RENDER_CELL_ASYNC"},
     ]
 
 
@@ -739,6 +725,7 @@ def test_table_shape_arrays(app_client):
         ["2", "world"],
         ["3", ""],
         ["4", "RENDER_CELL_DEMO"],
+        ["5", "RENDER_CELL_ASYNC"],
     ] == response.json["rows"]
 
 
@@ -752,7 +739,13 @@ def test_table_shape_arrayfirst(app_client):
             }
         )
     )
-    assert ["hello", "world", "", "RENDER_CELL_DEMO"] == response.json
+    assert [
+        "hello",
+        "world",
+        "",
+        "RENDER_CELL_DEMO",
+        "RENDER_CELL_ASYNC",
+    ] == response.json
 
 
 def test_table_shape_objects(app_client):
@@ -762,6 +755,7 @@ def test_table_shape_objects(app_client):
         {"id": "2", "content": "world"},
         {"id": "3", "content": ""},
         {"id": "4", "content": "RENDER_CELL_DEMO"},
+        {"id": "5", "content": "RENDER_CELL_ASYNC"},
     ] == response.json["rows"]
 
 
@@ -772,6 +766,7 @@ def test_table_shape_array(app_client):
         {"id": "2", "content": "world"},
         {"id": "3", "content": ""},
         {"id": "4", "content": "RENDER_CELL_DEMO"},
+        {"id": "5", "content": "RENDER_CELL_ASYNC"},
     ] == response.json
 
 
@@ -784,6 +779,7 @@ def test_table_shape_array_nl(app_client):
         {"id": "2", "content": "world"},
         {"id": "3", "content": ""},
         {"id": "4", "content": "RENDER_CELL_DEMO"},
+        {"id": "5", "content": "RENDER_CELL_ASYNC"},
     ] == results
 
 
@@ -804,6 +800,7 @@ def test_table_shape_object(app_client):
         "2": {"id": "2", "content": "world"},
         "3": {"id": "3", "content": ""},
         "4": {"id": "4", "content": "RENDER_CELL_DEMO"},
+        "5": {"id": "5", "content": "RENDER_CELL_ASYNC"},
     } == response.json
 
 
@@ -1078,6 +1075,46 @@ def test_searchable(app_client, path, expected_rows):
     assert expected_rows == response.json["rows"]
 
 
+_SEARCHMODE_RAW_RESULTS = [
+    [1, "barry cat", "terry dog", "panther"],
+    [2, "terry dog", "sara weasel", "puma"],
+]
+
+
+@pytest.mark.parametrize(
+    "table_metadata,querystring,expected_rows",
+    [
+        (
+            {},
+            "_search=te*+AND+do*",
+            [],
+        ),
+        (
+            {"searchmode": "raw"},
+            "_search=te*+AND+do*",
+            _SEARCHMODE_RAW_RESULTS,
+        ),
+        (
+            {},
+            "_search=te*+AND+do*&_searchmode=raw",
+            _SEARCHMODE_RAW_RESULTS,
+        ),
+        # Can be over-ridden with _searchmode=escaped
+        (
+            {"searchmode": "raw"},
+            "_search=te*+AND+do*&_searchmode=escaped",
+            [],
+        ),
+    ],
+)
+def test_searchmode(table_metadata, querystring, expected_rows):
+    with make_app_client(
+        metadata={"databases": {"fixtures": {"tables": {"searchable": table_metadata}}}}
+    ) as client:
+        response = client.get("/fixtures/searchable.json?" + querystring)
+        assert expected_rows == response.json["rows"]
+
+
 @pytest.mark.parametrize(
     "path,expected_rows",
     [
@@ -1121,12 +1158,21 @@ def test_searchable_invalid_column(app_client):
         ("/fixtures/simple_primary_key.json?content=hello", [["1", "hello"]]),
         (
             "/fixtures/simple_primary_key.json?content__contains=o",
-            [["1", "hello"], ["2", "world"], ["4", "RENDER_CELL_DEMO"]],
+            [
+                ["1", "hello"],
+                ["2", "world"],
+                ["4", "RENDER_CELL_DEMO"],
+            ],
         ),
         ("/fixtures/simple_primary_key.json?content__exact=", [["3", ""]]),
         (
             "/fixtures/simple_primary_key.json?content__not=world",
-            [["1", "hello"], ["3", ""], ["4", "RENDER_CELL_DEMO"]],
+            [
+                ["1", "hello"],
+                ["3", ""],
+                ["4", "RENDER_CELL_DEMO"],
+                ["5", "RENDER_CELL_ASYNC"],
+            ],
         ),
     ],
 )
@@ -1139,7 +1185,11 @@ def test_table_filter_queries_multiple_of_same_type(app_client):
     response = app_client.get(
         "/fixtures/simple_primary_key.json?content__not=world&content__not=hello"
     )
-    assert [["3", ""], ["4", "RENDER_CELL_DEMO"]] == response.json["rows"]
+    assert [
+        ["3", ""],
+        ["4", "RENDER_CELL_DEMO"],
+        ["5", "RENDER_CELL_ASYNC"],
+    ] == response.json["rows"]
 
 
 @pytest.mark.skipif(not detect_json1(), reason="Requires the SQLite json1 module")
@@ -1269,6 +1319,7 @@ def test_view(app_client):
         {"upper_content": "WORLD", "content": "world"},
         {"upper_content": "", "content": ""},
         {"upper_content": "RENDER_CELL_DEMO", "content": "RENDER_CELL_DEMO"},
+        {"upper_content": "RENDER_CELL_ASYNC", "content": "RENDER_CELL_ASYNC"},
     ]
 
 
@@ -1660,14 +1711,14 @@ def test_suggested_facets(app_client):
 
 
 def test_allow_facet_off():
-    with make_app_client(config={"allow_facet": False}) as client:
+    with make_app_client(settings={"allow_facet": False}) as client:
         assert 400 == client.get("/fixtures/facetable.json?_facet=planet_int").status
         # Should not suggest any facets either:
         assert [] == client.get("/fixtures/facetable.json").json["suggested_facets"]
 
 
 def test_suggest_facets_off():
-    with make_app_client(config={"suggest_facets": False}) as client:
+    with make_app_client(settings={"suggest_facets": False}) as client:
         # Now suggested_facets should be []
         assert [] == client.get("/fixtures/facetable.json").json["suggested_facets"]
 
@@ -1832,7 +1883,7 @@ def test_config_cache_size(app_client_larger_cache_size):
 
 
 def test_config_force_https_urls():
-    with make_app_client(config={"force_https_urls": True}) as client:
+    with make_app_client(settings={"force_https_urls": True}) as client:
         response = client.get("/fixtures/facetable.json?_size=3&_facet=state")
         assert response.json["next_url"].startswith("https://")
         assert response.json["facet_results"]["state"]["results"][0][
@@ -1870,7 +1921,7 @@ def test_custom_query_with_unicode_characters(app_client):
 
 @pytest.mark.parametrize("trace_debug", (True, False))
 def test_trace(trace_debug):
-    with make_app_client(config={"trace_debug": trace_debug}) as client:
+    with make_app_client(settings={"trace_debug": trace_debug}) as client:
         response = client.get("/fixtures/simple_primary_key.json?_trace=1")
         assert response.status == 200
 
@@ -2034,16 +2085,29 @@ def test_paginate_using_link_header(app_client, qs):
     sqlite_version() < (3, 31, 0),
     reason="generated columns were added in SQLite 3.31.0",
 )
-def test_generated_columns_are_visible_in_datasette(app_client):
-    response = app_client.get("/fixtures/generated_columns.json?_shape=array")
-    assert response.json == [
-        {
-            "rowid": 1,
-            "body": '{\n    "number": 1,\n    "string": "This is a string"\n}',
-            "id": 1,
-            "consideration": "This is a string",
+def test_generated_columns_are_visible_in_datasette():
+    with make_app_client(
+        extra_databases={
+            "generated.db": """
+                CREATE TABLE generated_columns (
+                    body TEXT,
+                    id INT GENERATED ALWAYS AS (json_extract(body, '$.number')) STORED,
+                    consideration INT GENERATED ALWAYS AS (json_extract(body, '$.string')) STORED
+                );
+                INSERT INTO generated_columns (body) VALUES (
+                    '{"number": 1, "string": "This is a string"}'
+                );"""
         }
-    ]
+    ) as client:
+        response = client.get("/generated/generated_columns.json?_shape=array")
+        assert response.json == [
+            {
+                "rowid": 1,
+                "body": '{"number": 1, "string": "This is a string"}',
+                "id": 1,
+                "consideration": "This is a string",
+            }
+        ]
 
 
 def test_http_options_request(app_client):

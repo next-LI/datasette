@@ -59,7 +59,7 @@ def publish_subcommand(publish):
     """Subcommands for 'datasette publish'"""
 
 
-@hookspec(firstresult=True)
+@hookspec
 def render_cell(value, column, table, database, datasette):
     """Customize rendering of HTML table cell values"""
 
@@ -75,8 +75,13 @@ def register_facet_classes():
 
 
 @hookspec
-def register_routes():
+def register_routes(datasette):
     """Register URL routes: return a list of (regex, view_function) pairs"""
+
+
+@hookspec
+def register_commands(cli):
+    """Register additional CLI commands, e.g. 'datasette mycommand ...'"""
 
 
 @hookspec
@@ -86,12 +91,12 @@ def actor_from_request(datasette, request):
 
 @hookspec
 def permission_allowed(datasette, actor, action, resource):
-    """Check if actor is allowed to perfom this action - return True, False or None"""
+    """Check if actor is allowed to perform this action - return True, False or None"""
 
 
 @hookspec
 def canned_queries(datasette, database, actor):
-    """Return a dictonary of canned query definitions or an awaitable function that returns them"""
+    """Return a dictionary of canned query definitions or an awaitable function that returns them"""
 
 
 @hookspec

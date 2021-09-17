@@ -9,7 +9,6 @@ import urllib
 import pint
 
 from datasette import __version__
-from datasette.plugins import pm
 from datasette.database import QueryInterrupted
 from datasette.utils import (
     await_me_maybe,
@@ -160,7 +159,6 @@ class BaseView:
 
 class DataView(BaseView):
     name = ""
-    re_named_parameter = re.compile(":([a-zA-Z0-9_]+)")
 
     async def options(self, request, *args, **kwargs):
         r = Response.text("ok")
@@ -616,7 +614,7 @@ class DataView(BaseView):
                     ]
                     + [("_size", "max")],
                     "datasette_version": __version__,
-                    "config": self.ds.config_dict(),
+                    "settings": self.ds.settings_dict(),
                 },
             }
             if "metadata" not in context:

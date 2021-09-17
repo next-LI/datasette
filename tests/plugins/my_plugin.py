@@ -97,21 +97,29 @@ def extra_body_script(
 
 @hookimpl
 def render_cell(value, column, table, database, datasette):
-    # Render some debug output in cell with value RENDER_CELL_DEMO
-    if value != "RENDER_CELL_DEMO":
-        return None
-    return json.dumps(
-        {
-            "column": column,
-            "table": table,
-            "database": database,
-            "config": datasette.plugin_config(
-                "name-of-plugin",
-                database=database,
-                table=table,
-            ),
-        }
-    )
+    async def inner():
+        # Render some debug output in cell with value RENDER_CELL_DEMO
+        if value == "RENDER_CELL_DEMO":
+            return json.dumps(
+                {
+                    "column": column,
+                    "table": table,
+                    "database": database,
+                    "config": datasette.plugin_config(
+                        "name-of-plugin",
+                        database=database,
+                        table=table,
+                    ),
+                }
+            )
+        elif value == "RENDER_CELL_ASYNC":
+            return (
+                await datasette.get_database(database).execute(
+                    "select 'RENDER_CELL_ASYNC_RESULT'"
+                )
+            ).single_value()
+
+    return inner
 
 
 @hookimpl
@@ -178,11 +186,11 @@ def actor_from_request(datasette, request):
 @hookimpl
 def asgi_wrapper():
     def wrap(app):
-        async def maybe_set_actor_in_scope(scope, recieve, send):
+        async def maybe_set_actor_in_scope(scope, receive, send):
             if b"_actor_in_scope" in scope.get("query_string", b""):
                 scope = dict(scope, actor={"id": "from-scope"})
                 print(scope)
-            await app(scope, recieve, send)
+            await app(scope, receive, send)
 
         return maybe_set_actor_in_scope
 

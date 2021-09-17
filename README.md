@@ -12,7 +12,7 @@
 
 Datasette is a tool for exploring and publishing data. It helps people take data of any shape or size and publish that as an interactive, explorable website and accompanying API.
 
-Datasette is aimed at data journalists, museum curators, archivists, local governments and anyone else who has data that they wish to share with the world.
+Datasette is aimed at data journalists, museum curators, archivists, local governments, scientists, researchers and anyone else who has data that they wish to share with the world.
 
 [Explore a demo](https://global-power-plants.datasettes.com/global-power-plants/global-power-plants), watch [a video about the project](https://simonwillison.net/2021/Feb/7/video/) or try it out by [uploading and publishing your own CSV data](https://docs.datasette.io/en/stable/getting_started.html#try-datasette-without-installing-anything-using-glitch).
 
@@ -52,39 +52,6 @@ Use Chrome on OS X? You can run datasette against your browser history like so:
 Now visiting http://localhost:8001/History/downloads will show you a web interface to browse your downloads data:
 
 ![Downloads table rendered by datasette](https://static.simonwillison.net/static/2017/datasette-downloads.png)
-
-## datasette serve options
-
-    Usage: datasette serve [OPTIONS] [FILES]...
-
-      Serve up specified SQLite database files with a web UI
-
-    Options:
-      -i, --immutable PATH      Database files to open in immutable mode
-      -h, --host TEXT           Host for server. Defaults to 127.0.0.1 which means
-                                only connections from the local machine will be
-                                allowed. Use 0.0.0.0 to listen to all IPs and
-                                allow access from other machines.
-      -p, --port INTEGER        Port for server, defaults to 8001
-      --reload                  Automatically reload if code or metadata change
-                                detected - useful for development
-      --cors                    Enable CORS by serving Access-Control-Allow-
-                                Origin: *
-      --load-extension PATH     Path to a SQLite extension to load
-      --inspect-file TEXT       Path to JSON file created using "datasette
-                                inspect"
-      -m, --metadata FILENAME   Path to JSON file containing license/source
-                                metadata
-      --template-dir DIRECTORY  Path to directory containing custom templates
-      --plugins-dir DIRECTORY   Path to directory containing custom plugins
-      --static STATIC MOUNT     mountpoint:path-to-directory for serving static
-                                files
-      --memory                  Make /_memory database available
-      --config CONFIG           Set config option using configname:value
-                                docs.datasette.io/en/stable/config.html
-      --version-note TEXT       Additional note to show on /-/versions
-      --help-config             Show available config options
-      --help                    Show this message and exit.
 
 ## metadata.json
 

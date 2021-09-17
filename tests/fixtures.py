@@ -1,5 +1,5 @@
 from datasette.app import Datasette
-from datasette.utils.sqlite import sqlite3, sqlite_version, supports_generated_columns
+from datasette.utils.sqlite import sqlite3, sqlite_version
 from datasette.utils.testing import TestClient
 import click
 import contextlib
@@ -70,6 +70,7 @@ EXPECTED_PLUGINS = [
             "extra_template_vars",
             "menu_links",
             "permission_allowed",
+            "register_routes",
             "render_cell",
             "startup",
             "table_actions",
@@ -98,7 +99,7 @@ def make_app_client(
     max_returned_rows=None,
     cors=False,
     memory=False,
-    config=None,
+    settings=None,
     filename="fixtures.db",
     is_immutable=False,
     extra_databases=None,
@@ -118,8 +119,6 @@ def make_app_client(
             immutables = []
         conn = sqlite3.connect(filepath)
         conn.executescript(TABLES)
-        if supports_generated_columns():
-            conn.executescript(GENERATED_COLUMNS_SQL)
         for sql, params in TABLE_PARAMETERIZED_SQL:
             with conn:
                 conn.execute(sql, params)
@@ -130,7 +129,7 @@ def make_app_client(
                 # Insert at start to help test /-/databases ordering:
                 files.insert(0, extra_filepath)
         os.chdir(os.path.dirname(filepath))
-        config = config or {}
+        settings = settings or {}
         for key, value in {
             "default_page_size": 50,
             "max_returned_rows": max_returned_rows or 100,
@@ -139,8 +138,8 @@ def make_app_client(
             # errors when running the full test suite:
             "num_sql_threads": 1,
         }.items():
-            if key not in config:
-                config[key] = value
+            if key not in settings:
+                settings[key] = value
         ds = Datasette(
             files,
             immutables=immutables,
@@ -148,7 +147,7 @@ def make_app_client(
             cors=cors,
             metadata=metadata or METADATA,
             plugins_dir=PLUGINS_DIR,
-            config=config,
+            settings=settings,
             inspect_data=inspect_data,
             static_mounts=static_mounts,
             template_dir=template_dir,
@@ -172,7 +171,7 @@ def app_client_no_files():
 
 @pytest.fixture(scope="session")
 def app_client_base_url_prefix():
-    with make_app_client(config={"base_url": "/prefix/"}) as client:
+    with make_app_client(settings={"base_url": "/prefix/"}) as client:
         yield client
 
 
@@ -211,13 +210,13 @@ def app_client_two_attached_databases_one_immutable():
 
 @pytest.fixture(scope="session")
 def app_client_with_hash():
-    with make_app_client(config={"hash_urls": True}, is_immutable=True) as client:
+    with make_app_client(settings={"hash_urls": True}, is_immutable=True) as client:
         yield client
 
 
 @pytest.fixture(scope="session")
 def app_client_with_trace():
-    with make_app_client(config={"trace_debug": True}, is_immutable=True) as client:
+    with make_app_client(settings={"trace_debug": True}, is_immutable=True) as client:
         yield client
 
 
@@ -235,13 +234,13 @@ def app_client_returned_rows_matches_page_size():
 
 @pytest.fixture(scope="session")
 def app_client_larger_cache_size():
-    with make_app_client(config={"cache_size_kb": 2500}) as client:
+    with make_app_client(settings={"cache_size_kb": 2500}) as client:
         yield client
 
 
 @pytest.fixture(scope="session")
 def app_client_csv_max_mb_one():
-    with make_app_client(config={"max_csv_mb": 1}) as client:
+    with make_app_client(settings={"max_csv_mb": 1}) as client:
         yield client
 
 
@@ -337,6 +336,12 @@ METADATA = {
                     "fts_table": "searchable_fts",
                     "fts_pk": "pk",
                 },
+                "roadside_attractions": {
+                    "columns": {
+                        "name": "The name of the attraction",
+                        "address": "The street address for the attraction",
+                    }
+                },
                 "attraction_characteristic": {"sort_desc": "pk"},
                 "facet_cities": {"sort": "name"},
                 "paginated_view": {"size": 25},
@@ -361,6 +366,7 @@ METADATA = {
                     "title": "Search neighborhoods",
                     "description_html": "<b>Demonstrating</b> simple like search",
                     "fragment": "fragment-goes-here",
+                    "hide_sql": True,
                 },
             },
         }
@@ -644,6 +650,7 @@ INSERT INTO simple_primary_key VALUES (1, 'hello');
 INSERT INTO simple_primary_key VALUES (2, 'world');
 INSERT INTO simple_primary_key VALUES (3, '');
 INSERT INTO simple_primary_key VALUES (4, 'RENDER_CELL_DEMO');
+INSERT INTO simple_primary_key VALUES (5, 'RENDER_CELL_ASYNC');
 
 INSERT INTO primary_key_multiple_columns VALUES (1, 'hey', 'world');
 INSERT INTO primary_key_multiple_columns_explicit_label VALUES (1, 'hey', 'world2');
@@ -720,18 +727,6 @@ INSERT INTO "searchable_fts" (rowid, text1, text2)
     SELECT rowid, text1, text2 FROM searchable;
 """
 
-GENERATED_COLUMNS_SQL = """
-CREATE TABLE generated_columns (
-    body TEXT,
-    id INT GENERATED ALWAYS AS (json_extract(body, '$.number')) STORED,
-    consideration INT GENERATED ALWAYS AS (json_extract(body, '$.string')) STORED
-);
-INSERT INTO generated_columns (body) VALUES ('{
-    "number": 1,
-    "string": "This is a string"
-}');
-"""
-
 
 def assert_permissions_checked(datasette, actions):
     # actions is a list of "action" or (action, resource) tuples
@@ -792,9 +787,6 @@ def cli(db_filename, metadata, plugins_path, recreate, extra_db_filename):
     for sql, params in TABLE_PARAMETERIZED_SQL:
         with conn:
             conn.execute(sql, params)
-    if supports_generated_columns():
-        with conn:
-            conn.executescript(GENERATED_COLUMNS_SQL)
     print(f"Test tables written to {db_filename}")
     if metadata:
         with open(metadata, "w") as fp:

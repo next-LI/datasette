@@ -610,3 +610,37 @@ async def test_initial_path_for_datasette(tmp_path_factory, dbs, expected_path):
     )
     path = await utils.initial_path_for_datasette(datasette)
     assert path == expected_path
+
+
+@pytest.mark.parametrize(
+    "content,expected",
+    (
+        ("title: Hello", {"title": "Hello"}),
+        ('{"title": "Hello"}', {"title": "Hello"}),
+        ("{{ this }} is {{ bad }}", None),
+    ),
+)
+def test_parse_metadata(content, expected):
+    if expected is None:
+        with pytest.raises(utils.BadMetadataError):
+            utils.parse_metadata(content)
+    else:
+        assert utils.parse_metadata(content) == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "sql,expected",
+    (
+        ("select 1", []),
+        ("select 1 + :one", ["one"]),
+        ("select 1 + :one + :two", ["one", "two"]),
+        ("select 'bob' || '0:00' || :cat", ["cat"]),
+        ("select this is invalid :one, :two, :three", ["one", "two", "three"]),
+    ),
+)
+async def test_derive_named_parameters(sql, expected):
+    ds = Datasette([], memory=True)
+    db = ds.get_database("_memory")
+    params = await utils.derive_named_parameters(db, sql)
+    assert params == expected

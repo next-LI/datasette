@@ -5,7 +5,6 @@ from collections import OrderedDict, namedtuple, Counter
 import base64
 import hashlib
 import inspect
-import itertools
 import json
 import markupsafe
 import mergedeep
@@ -17,10 +16,9 @@ import time
 import types
 import shutil
 import urllib
-import numbers
 import yaml
 from .shutil_backport import copytree
-from .sqlite import sqlite3, sqlite_version, supports_table_xinfo
+from .sqlite import sqlite3, supports_table_xinfo
 
 
 # From https://www.sqlite.org/lang_keywords.html
@@ -1078,3 +1076,16 @@ class PrefixedUrlString(str):
 
 class StartupError(Exception):
     pass
+
+
+_re_named_parameter = re.compile(":([a-zA-Z0-9_]+)")
+
+
+async def derive_named_parameters(db, sql):
+    explain = "explain {}".format(sql.strip().rstrip(";"))
+    possible_params = _re_named_parameter.findall(sql)
+    try:
+        results = await db.execute(explain, {p: None for p in possible_params})
+        return [row["p4"].lstrip(":") for row in results if row["opcode"] == "Variable"]
+    except sqlite3.DatabaseError:
+        return possible_params

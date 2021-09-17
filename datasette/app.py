@@ -58,7 +58,6 @@ from .utils import (
     parse_metadata,
     resolve_env_secrets,
     to_css_class,
-    HASH_LENGTH,
 )
 from .utils.asgi import (
     AsgiLifespan,
@@ -81,6 +80,11 @@ from .utils.sqlite import (
 from .tracer import AsgiTracer
 from .plugins import pm, DEFAULT_PLUGINS, get_plugins
 from .version import __version__
+
+try:
+    import rich
+except ImportError:
+    rich = None
 
 app_root = Path(__file__).parent.parent
 
@@ -196,7 +200,7 @@ class Datasette:
         plugins_dir=None,
         static_mounts=None,
         memory=False,
-        config=None,
+        settings=None,
         secret=None,
         version_note=None,
         config_dir=None,
@@ -225,6 +229,7 @@ class Datasette:
         self.inspect_data = inspect_data
         self.immutables = set(immutables or [])
         self.databases = collections.OrderedDict()
+        self._refresh_schemas_lock = asyncio.Lock()
         self.crossdb = crossdb
         if memory or crossdb or not self.files:
             self.add_database(Database(self, is_memory=True), name="_memory")
@@ -272,9 +277,9 @@ class Datasette:
         self.static_mounts = static_mounts or []
         if config_dir and (config_dir / "config.json").exists():
             raise StartupError("config.json should be renamed to settings.json")
-        if config_dir and (config_dir / "settings.json").exists() and not config:
-            config = json.loads((config_dir / "settings.json").read_text())
-        self._settings = dict(DEFAULT_SETTINGS, **(config or {}))
+        if config_dir and (config_dir / "settings.json").exists() and not settings:
+            settings = json.loads((config_dir / "settings.json").read_text())
+        self._settings = dict(DEFAULT_SETTINGS, **(settings or {}))
         self.renderers = {}  # File extension -> (renderer, can_render) functions
         self.version_note = version_note
         self.executor = futures.ThreadPoolExecutor(
@@ -333,6 +338,12 @@ class Datasette:
         self.client = DatasetteClient(self)
 
     async def refresh_schemas(self):
+        if self._refresh_schemas_lock.locked():
+            return
+        async with self._refresh_schemas_lock:
+            await self._refresh_schemas()
+
+    async def _refresh_schemas(self):
         internal_db = self.databases["_internal"]
         if not self.internal_db_created:
             await init_internal_db(internal_db)
@@ -408,8 +419,8 @@ class Datasette:
     def setting(self, key):
         return self._settings.get(key, None)
 
-    def config_dict(self):
-        # Returns a fully resolved config dictionary, useful for templates
+    def settings_dict(self):
+        # Returns a fully resolved settings dictionary, useful for templates
         return {option.name: self.setting(option.name) for option in SETTINGS}
 
     def _metadata_recursive_update(self, orig, updated):
@@ -954,7 +965,7 @@ class Datasette:
         """Returns an ASGI app function that serves the whole of Datasette"""
         routes = []
 
-        for routes_to_add in pm.hook.register_routes():
+        for routes_to_add in pm.hook.register_routes(datasette=self):
             for regex, view_fn in routes_to_add:
                 routes.append((regex, wrap_view(view_fn, self)))
 
@@ -1263,6 +1274,9 @@ class DatasetteRouter:
             import pdb
 
             pdb.post_mortem(exception.__traceback__)
+
+        if rich is not None:
+            rich.get_console().print_exception(show_locals=True)
 
         title = None
         if isinstance(exception, Forbidden):

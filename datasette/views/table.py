@@ -125,6 +125,7 @@ class RowTableShared(DataView):
         """Returns columns, rows for specified table - including fancy foreign key treatment"""
         db = self.ds.databases[database]
         table_metadata = self.ds.table_metadata(database, table)
+        column_descriptions = table_metadata.get("columns") or {}
         column_details = {col.name: col for col in await db.table_column_details(table)}
         sortable_columns = await self.sortable_columns_for_table(database, table, True)
         pks = await db.primary_keys(table)
@@ -147,6 +148,7 @@ class RowTableShared(DataView):
                     "is_pk": r[0] in pks_for_display,
                     "type": type_,
                     "notnull": notnull,
+                    "description": column_descriptions.get(r[0]),
                 }
             )
 
@@ -191,14 +193,19 @@ class RowTableShared(DataView):
 
                 # First let the plugins have a go
                 # pylint: disable=no-member
-                plugin_display_value = pm.hook.render_cell(
+                plugin_display_value = None
+                for candidate in pm.hook.render_cell(
                     value=value,
                     column=column,
                     table=table,
                     database=database,
                     datasette=self.ds,
-                )
-                if plugin_display_value is not None:
+                ):
+                    candidate = await await_me_maybe(candidate)
+                    if candidate is not None:
+                        plugin_display_value = candidate
+                        break
+                if plugin_display_value:
                     display_value = plugin_display_value
                 elif isinstance(value, bytes):
                     display_value = markupsafe.Markup(
@@ -495,7 +502,13 @@ class TableView(RowTableShared):
             if pair[0].startswith("_search") and pair[0] != "_searchmode"
         )
         search = ""
-        search_mode_raw = special_args.get("_searchmode") == "raw"
+        search_mode_raw = table_metadata.get("searchmode") == "raw"
+        # Or set it from the querystring
+        qs_searchmode = special_args.get("_searchmode")
+        if qs_searchmode == "escaped":
+            search_mode_raw = False
+        if qs_searchmode == "raw":
+            search_mode_raw = True
         if fts_table and search_args:
             if "_search" in search_args:
                 # Simple ?_search=xxx
@@ -668,12 +681,11 @@ class TableView(RowTableShared):
         else:
             page_size = self.ds.page_size
 
-        sql_no_limit = (
-            "select {select_all_columns} from {table_name} {where}{order_by}".format(
+        sql_no_order_no_limit = (
+            "select {select_all_columns} from {table_name} {where}".format(
                 select_all_columns=select_all_columns,
                 table_name=escape_sqlite(table),
                 where=where_clause,
-                order_by=order_by,
             )
         )
         sql = "select {select_specified_columns} from {table_name} {where}{order_by} limit {page_size}{offset}".format(
@@ -730,7 +742,7 @@ class TableView(RowTableShared):
                     self.ds,
                     request,
                     database,
-                    sql=sql_no_limit,
+                    sql=sql_no_order_no_limit,
                     params=params,
                     table=table,
                     metadata=table_metadata,
@@ -916,6 +928,7 @@ class TableView(RowTableShared):
                     key=lambda f: (len(f["results"]), f["name"]),
                     reverse=True,
                 ),
+                "show_facet_counts": special_args.get("_facet_size") == "max",
                 "extra_wheres_for_ui": extra_wheres_for_ui,
                 "form_hidden_args": form_hidden_args,
                 "is_sortable": any(c["sortable"] for c in display_columns),

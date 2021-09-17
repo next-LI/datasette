@@ -149,7 +149,7 @@ Create a ``Response`` object and then use ``await response.asgi_send(send)``, pa
 
 .. code-block:: python
 
-    async def require_authorization(scope, recieve, send):
+    async def require_authorization(scope, receive, send):
         response = Response.text(
             "401 Authorization Required",
             headers={
@@ -195,6 +195,17 @@ Datasette class
 ===============
 
 This object is an instance of the ``Datasette`` class, passed to many plugin hooks as an argument called ``datasette``.
+
+.. _datasette_databases:
+
+.databases
+----------
+
+Property exposing an ordered dictionary of databases currently connected to Datasette.
+
+The dictionary keys are the name of the database that is used in the URL - e.g. ``/fixtures`` would have a key of ``"fixtures"``. The values are :ref:`internals_database` instances.
+
+All databases are listed, irrespective of user permissions. This means that the ``_internal`` database will always be listed here.
 
 .. _datasette_plugin_config:
 
@@ -431,13 +442,13 @@ It offers the following methods:
 ``await datasette.client.get(path, **kwargs)`` - returns HTTPX Response
     Execute an internal GET request against that path.
 
-``await datasette.client.post(path, **kwargs)`` - returns HTTPX Respons
+``await datasette.client.post(path, **kwargs)`` - returns HTTPX Response
     Execute an internal POST request. Use ``data={"name": "value"}`` to pass form parameters.
 
 ``await datasette.client.options(path, **kwargs)`` - returns HTTPX Response
     Execute an internal OPTIONS request.
 
-``await datasette.client.head(path, **kwargs)`` - returns HTTPX Respons
+``await datasette.client.head(path, **kwargs)`` - returns HTTPX Response
     Execute an internal HEAD request.
 
 ``await datasette.client.put(path, **kwargs)`` - returns HTTPX Response
@@ -653,6 +664,10 @@ This method works like ``.execute_write()``, but instead of a SQL statement you 
 
 The function can then perform multiple actions, safe in the knowledge that it has exclusive access to the single writable connection as long as it is executing.
 
+.. warning::
+
+    ``fn`` needs to be a regular function, not an ``async def`` function.
+
 For example:
 
 .. code-block:: python
@@ -714,7 +729,7 @@ The ``Database`` class also provides properties and methods for introspecting th
     List of names of tables in the database.
 
 ``await db.view_names()`` - list of strings
-    List of names of views in tha database.
+    List of names of views in the database.
 
 ``await db.table_columns(table)`` - list of strings
     Names of columns in a specific table.
@@ -795,3 +810,21 @@ By default all actors are denied access to the ``view-database`` permission for 
 Plugins can access this database by calling ``db = datasette.get_database("_internal")`` and then executing queries using the :ref:`Database API <internals_database>`.
 
 You can explore an example of this database by `signing in as root <https://latest.datasette.io/login-as-root>`__ to the ``latest.datasette.io`` demo instance and then navigating to `latest.datasette.io/_internal <https://latest.datasette.io/_internal>`__.
+
+.. _internals_utils:
+
+The datasette.utils module
+==========================
+
+The ``datasette.utils`` module contains various utility functions used by Datasette. As a general rule you should consider anything in this module to be unstable - functions and classes here could change without warning or be removed entirely between Datasette releases, without being mentioned in the release notes.
+
+The exception to this rule is anythang that is documented here. If you find a need for an undocumented utility function in your own work, consider `opening an issue <https://github.com/simonw/datasette/issues/new>`__ requesting that the function you are using be upgraded to documented and supported status.
+
+.. _internals_utils_parse_metadata:
+
+parse_metadata(content)
+-----------------------
+
+This function accepts a string containing either JSON or YAML, expected to be of the format described in :ref:`metadata`. It returns a nested Python dictionary representing the parsed data from that string.
+
+If the metadata cannot be parsed as either JSON or YAML the function will raise a ``utils.BadMetadataError`` exception.

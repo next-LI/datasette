@@ -214,7 +214,7 @@ def test_definition_sql(path, expected_definition_sql, app_client):
 
 
 def test_table_cell_truncation():
-    with make_app_client(config={"truncate_cells_html": 5}) as client:
+    with make_app_client(settings={"truncate_cells_html": 5}) as client:
         response = client.get("/fixtures/facetable")
         assert response.status == 200
         table = Soup(response.body, "html.parser").find("table")
@@ -239,7 +239,7 @@ def test_table_cell_truncation():
 
 
 def test_row_page_does_not_truncate():
-    with make_app_client(config={"truncate_cells_html": 5}) as client:
+    with make_app_client(settings={"truncate_cells_html": 5}) as client:
         response = client.get("/fixtures/facetable/1")
         assert response.status == 200
         table = Soup(response.body, "html.parser").find("table")
@@ -479,7 +479,7 @@ def test_facet_display(app_client):
     for div in divs:
         actual.append(
             {
-                "name": div.find("strong").text,
+                "name": div.find("strong").text.split()[0],
                 "items": [
                     {
                         "name": a.text,
@@ -1072,7 +1072,9 @@ def test_database_download_disallowed_for_memory():
 
 
 def test_allow_download_off():
-    with make_app_client(is_immutable=True, config={"allow_download": False}) as client:
+    with make_app_client(
+        is_immutable=True, settings={"allow_download": False}
+    ) as client:
         response = client.get("/fixtures")
         soup = Soup(response.body, "html.parser")
         assert not len(soup.findAll("a", {"href": re.compile(r"\.db$")}))
@@ -1236,6 +1238,66 @@ def test_show_hide_sql_query(app_client):
         ("sql", "select ('https://twitter.com/' || 'simonw') as user_url;"),
         ("_hide_sql", "1"),
     ] == [(hidden["name"], hidden["value"]) for hidden in hiddens]
+
+
+def test_canned_query_with_hide_has_no_hidden_sql(app_client):
+    # For a canned query the show/hide should NOT have a hidden SQL field
+    # https://github.com/simonw/datasette/issues/1411
+    response = app_client.get("/fixtures/pragma_cache_size?_hide_sql=1")
+    soup = Soup(response.body, "html.parser")
+    hiddens = soup.find("form").select("input[type=hidden]")
+    assert [
+        ("_hide_sql", "1"),
+    ] == [(hidden["name"], hidden["value"]) for hidden in hiddens]
+
+
+@pytest.mark.parametrize(
+    "hide_sql,querystring,expected_hidden,expected_show_hide_link,expected_show_hide_text",
+    (
+        (False, "", None, "/_memory/one?_hide_sql=1", "hide"),
+        (False, "?_hide_sql=1", "_hide_sql", "/_memory/one", "show"),
+        (True, "", None, "/_memory/one?_show_sql=1", "show"),
+        (True, "?_show_sql=1", "_show_sql", "/_memory/one", "hide"),
+    ),
+)
+def test_canned_query_show_hide_metadata_option(
+    hide_sql,
+    querystring,
+    expected_hidden,
+    expected_show_hide_link,
+    expected_show_hide_text,
+):
+    with make_app_client(
+        metadata={
+            "databases": {
+                "_memory": {
+                    "queries": {
+                        "one": {
+                            "sql": "select 1 + 1",
+                            "hide_sql": hide_sql,
+                        }
+                    }
+                }
+            }
+        },
+        memory=True,
+    ) as client:
+        expected_show_hide_fragment = '(<a href="{}">{}</a>)'.format(
+            expected_show_hide_link, expected_show_hide_text
+        )
+        response = client.get("/_memory/one" + querystring)
+        html = response.text
+        show_hide_fragment = html.split('<span class="show-hide-sql">')[1].split(
+            "</span>"
+        )[0]
+        assert show_hide_fragment == expected_show_hide_fragment
+        if expected_hidden:
+            assert (
+                '<input type="hidden" name="{}" value="1">'.format(expected_hidden)
+                in html
+            )
+        else:
+            assert '<input type="hidden" ' not in html
 
 
 def test_extra_where_clauses(app_client):
@@ -1426,7 +1488,7 @@ def test_query_error(app_client):
 
 
 def test_config_template_debug_on():
-    with make_app_client(config={"template_debug": True}) as client:
+    with make_app_client(settings={"template_debug": True}) as client:
         response = client.get("/fixtures/facetable?_context=1")
         assert response.status == 200
         assert response.text.startswith("<pre>{")
@@ -1440,7 +1502,7 @@ def test_config_template_debug_off(app_client):
 
 def test_debug_context_includes_extra_template_vars():
     # https://github.com/simonw/datasette/issues/693
-    with make_app_client(config={"template_debug": True}) as client:
+    with make_app_client(settings={"template_debug": True}) as client:
         response = client.get("/fixtures/facetable?_context=1")
         # scope_path is added by PLUGIN1
         assert "scope_path" in response.text
@@ -1684,7 +1746,7 @@ def test_facet_more_links(
     expected_ellipses_url,
 ):
     with make_app_client(
-        config={"max_returned_rows": max_returned_rows, "default_facet_size": 2}
+        settings={"max_returned_rows": max_returned_rows, "default_facet_size": 2}
     ) as client:
         response = client.get(path)
         soup = Soup(response.body, "html.parser")
@@ -1717,3 +1779,41 @@ def test_trace_correctly_escaped(app_client):
     response = app_client.get("/fixtures?sql=select+'<h1>Hello'&_trace=1")
     assert "select '<h1>Hello" not in response.text
     assert "select &#39;&lt;h1&gt;Hello" in response.text
+
+
+def test_column_metadata(app_client):
+    response = app_client.get("/fixtures/roadside_attractions")
+    soup = Soup(response.body, "html.parser")
+    dl = soup.find("dl")
+    assert [(dt.text, dt.nextSibling.text) for dt in dl.findAll("dt")] == [
+        ("name", "The name of the attraction"),
+        ("address", "The street address for the attraction"),
+    ]
+    assert (
+        soup.select("th[data-column=name]")[0]["data-column-description"]
+        == "The name of the attraction"
+    )
+    assert (
+        soup.select("th[data-column=address]")[0]["data-column-description"]
+        == "The street address for the attraction"
+    )
+
+
+@pytest.mark.parametrize("use_facet_size_max", (True, False))
+def test_facet_total_shown_if_facet_max_size(use_facet_size_max):
+    # https://github.com/simonw/datasette/issues/1423
+    with make_app_client(settings={"max_returned_rows": 100}) as client:
+        path = "/fixtures/sortable?_facet=content&_facet=pk1"
+        if use_facet_size_max:
+            path += "&_facet_size=max"
+        response = client.get(path)
+        assert response.status == 200
+    fragments = (
+        '<span class="facet-info-total">&gt;100</span>',
+        '<span class="facet-info-total">8</span>',
+    )
+    for fragment in fragments:
+        if use_facet_size_max:
+            assert fragment in response.text
+        else:
+            assert fragment not in response.text
