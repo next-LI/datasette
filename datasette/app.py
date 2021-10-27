@@ -46,6 +46,7 @@ from .database import Database, QueryInterrupted
 from .utils import (
     PrefixedUrlString,
     StartupError,
+    add_cors_headers,
     async_call_with_supported_arguments,
     await_me_maybe,
     call_with_supported_arguments,
@@ -1139,6 +1140,7 @@ class DatasetteRouter:
         raw_path = scope.get("raw_path")
         if raw_path:
             path = raw_path.decode("ascii")
+        path = path.partition("?")[0]
         return await self.route_path(scope, receive, send, path)
 
     async def route_path(self, scope, receive, send, path):
@@ -1192,7 +1194,9 @@ class DatasetteRouter:
 
     async def handle_404(self, request, send, exception=None):
         # If URL has a trailing slash, redirect to URL without it
-        path = request.scope.get("raw_path", request.scope["path"].encode("utf8"))
+        path = request.scope.get(
+            "raw_path", request.scope["path"].encode("utf8")
+        ).partition(b"?")[0]
         context = {}
         if path.endswith(b"/"):
             path = path.rstrip(b"/")
@@ -1318,7 +1322,7 @@ class DatasetteRouter:
         )
         headers = {}
         if self.ds.cors:
-            headers["Access-Control-Allow-Origin"] = "*"
+            add_cors_headers(headers)
         if request.path.split("?")[0].endswith(".json"):
             await asgi_send_json(send, info, status=status, headers=headers)
         else:

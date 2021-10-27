@@ -588,13 +588,15 @@ class TableView(RowTableShared):
         _next = _next or special_args.get("_next")
         offset = ""
         if _next:
+            sort_value = None
             if is_view:
                 # _next is an offset
                 offset = f" offset {int(_next)}"
             else:
                 components = urlsafe_components(_next)
-                # If a sort order is applied, the first of these is the sort value
-                if sort or sort_desc:
+                # If a sort order is applied and there are multiple components,
+                # the first of these is the sort value
+                if (sort or sort_desc) and (len(components) > 1):
                     sort_value = components[0]
                     # Special case for if non-urlencoded first token was $null
                     if _next.split(",")[0] == "$null":
@@ -887,7 +889,7 @@ class TableView(RowTableShared):
 
             form_hidden_args = []
             for key in request.args:
-                if key.startswith("_") and key not in ("_sort", "_search"):
+                if key.startswith("_") and key not in ("_sort", "_search", "_next"):
                     for value in request.args.getlist(key):
                         form_hidden_args.append((key, value))
 

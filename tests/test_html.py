@@ -100,9 +100,9 @@ def test_not_allowed_methods():
 
 
 def test_database_page_redirects_with_url_hash(app_client_with_hash):
-    response = app_client_with_hash.get("/fixtures", allow_redirects=False)
-    assert response.status == 302
     response = app_client_with_hash.get("/fixtures")
+    assert response.status == 302
+    response = app_client_with_hash.get("/fixtures", follow_redirects=True)
     assert "fixtures" in response.text
 
 
@@ -161,22 +161,22 @@ def test_sql_time_limit(app_client_shorter_time_limit):
 
 
 def test_row_redirects_with_url_hash(app_client_with_hash):
-    response = app_client_with_hash.get(
-        "/fixtures/simple_primary_key/1", allow_redirects=False
-    )
+    response = app_client_with_hash.get("/fixtures/simple_primary_key/1")
     assert response.status == 302
     assert response.headers["Location"].endswith("/1")
-    response = app_client_with_hash.get("/fixtures/simple_primary_key/1")
+    response = app_client_with_hash.get(
+        "/fixtures/simple_primary_key/1", follow_redirects=True
+    )
     assert response.status == 200
 
 
 def test_row_strange_table_name_with_url_hash(app_client_with_hash):
-    response = app_client_with_hash.get(
-        "/fixtures/table%2Fwith%2Fslashes.csv/3", allow_redirects=False
-    )
+    response = app_client_with_hash.get("/fixtures/table%2Fwith%2Fslashes.csv/3")
     assert response.status == 302
     assert response.headers["Location"].endswith("/table%2Fwith%2Fslashes.csv/3")
-    response = app_client_with_hash.get("/fixtures/table%2Fwith%2Fslashes.csv/3")
+    response = app_client_with_hash.get(
+        "/fixtures/table%2Fwith%2Fslashes.csv/3", follow_redirects=True
+    )
     assert response.status == 200
 
 
@@ -255,13 +255,13 @@ def test_add_filter_redirects(app_client):
     )
     path_base = "/fixtures/simple_primary_key"
     path = path_base + "?" + filter_args
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert response.headers["Location"].endswith("?content__startswith=x")
 
     # Adding a redirect to an existing query string:
     path = path_base + "?foo=bar&" + filter_args
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert response.headers["Location"].endswith("?foo=bar&content__startswith=x")
 
@@ -277,7 +277,7 @@ def test_add_filter_redirects(app_client):
             }
         )
     )
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert response.headers["Location"].endswith("?content__isnull=5")
 
@@ -299,7 +299,7 @@ def test_existing_filter_redirects(app_client):
     }
     path_base = "/fixtures/simple_primary_key"
     path = path_base + "?" + urllib.parse.urlencode(filter_args)
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert_querystring_equal(
         "name__contains=hello&age__gte=22&age__lt=30&name__contains=world",
@@ -309,7 +309,7 @@ def test_existing_filter_redirects(app_client):
     # Setting _filter_column_3 to empty string should remove *_3 entirely
     filter_args["_filter_column_3"] = ""
     path = path_base + "?" + urllib.parse.urlencode(filter_args)
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert_querystring_equal(
         "name__contains=hello&age__gte=22&name__contains=world",
@@ -317,7 +317,7 @@ def test_existing_filter_redirects(app_client):
     )
 
     # ?_filter_op=exact should be removed if unaccompanied by _fiter_column
-    response = app_client.get(path_base + "?_filter_op=exact", allow_redirects=False)
+    response = app_client.get(path_base + "?_filter_op=exact")
     assert response.status == 302
     assert "?" not in response.headers["Location"]
 
@@ -336,7 +336,7 @@ def test_empty_search_parameter_gets_removed(app_client):
             }
         )
     )
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert response.headers["Location"].endswith("?name__exact=chidi")
 
@@ -360,7 +360,7 @@ def test_sort_by_desc_redirects(app_client):
         + "?"
         + urllib.parse.urlencode({"_sort": "sortable", "_sort_by_desc": "1"})
     )
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert response.status == 302
     assert response.headers["Location"].endswith("?_sort_desc=sortable")
 
@@ -560,6 +560,16 @@ def test_facets_persist_through_filter_form(app_client):
         ("_facet", "planet_int"),
         ("_facet", "city_id"),
         ("_facet_array", "tags"),
+    ]
+
+
+def test_next_does_not_persist_in_hidden_field(app_client):
+    response = app_client.get("/fixtures/searchable?_size=1&_next=1")
+    assert response.status == 200
+    inputs = Soup(response.body, "html.parser").find("form").findAll("input")
+    hiddens = [i for i in inputs if i["type"] == "hidden"]
+    assert [(hidden["name"], hidden["value"]) for hidden in hiddens] == [
+        ("_size", "1"),
     ]
 
 
@@ -1138,7 +1148,7 @@ def test_404(app_client, path):
     [("/fixtures/", "/fixtures"), ("/fixtures/simple_view/", "/fixtures/simple_view")],
 )
 def test_404_trailing_slash_redirect(app_client, path, expected_redirect):
-    response = app_client.get(path, allow_redirects=False)
+    response = app_client.get(path)
     assert 302 == response.status
     assert expected_redirect == response.headers["Location"]
 
@@ -1817,3 +1827,9 @@ def test_facet_total_shown_if_facet_max_size(use_facet_size_max):
             assert fragment in response.text
         else:
             assert fragment not in response.text
+
+
+def test_sort_rowid_with_next(app_client):
+    # https://github.com/simonw/datasette/issues/1470
+    response = app_client.get("/fixtures/binary_data?_size=1&_next=1&_sort=rowid")
+    assert response.status == 200
