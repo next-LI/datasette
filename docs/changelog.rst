@@ -4,6 +4,25 @@
 Changelog
 =========
 
+.. _v0_59_3:
+
+0.59.3 (2021-11-20)
+-------------------
+
+- Fixed numerous bugs when running Datasette :ref:`behind a proxy <deploying_proxy>` with a prefix URL path using the :ref:`setting_base_url` setting. A live demo of this mode is now available at `datasette-apache-proxy-demo.datasette.io/prefix/ <https://datasette-apache-proxy-demo.datasette.io/prefix/>`__. (:issue:`1519`, :issue:`838`)
+- ``?column__arraycontains=`` and ``?column__arraynotcontains=`` table parameters now also work against SQL views. (:issue:`448`)
+- ``?_facet_array=column`` no longer returns incorrect counts if columns contain the same value more than once.
+
+.. _v0_59_2:
+
+0.59.2 (2021-11-13)
+-------------------
+
+- Column names with a leading underscore now work correctly when used as a facet. (:issue:`1506`)
+- Applying ``?_nocol=`` to a column no longer removes that column from the filtering interface. (:issue:`1503`)
+- Official Datasette Docker container now uses Debian Bullseye as the base image. (:issue:`1497`)
+- Datasette is four years old today! Here's the `original release announcement <https://simonwillison.net/2017/Nov/13/datasette/>`__ from 2017.
+
 .. _v0_59_1:
 
 0.59.1 (2021-10-24)

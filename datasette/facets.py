@@ -180,7 +180,11 @@ class ColumnFacet(Facet):
                             "name": column,
                             "toggle_url": self.ds.absolute_url(
                                 self.request,
-                                path_with_added_args(self.request, {"_facet": column}),
+                                self.ds.urls.path(
+                                    path_with_added_args(
+                                        self.request, {"_facet": column}
+                                    )
+                                ),
                             ),
                         }
                     )
@@ -221,8 +225,8 @@ class ColumnFacet(Facet):
                     "name": column,
                     "type": self.type,
                     "hideable": source != "metadata",
-                    "toggle_url": path_with_removed_args(
-                        self.request, {"_facet": column}
+                    "toggle_url": self.ds.urls.path(
+                        path_with_removed_args(self.request, {"_facet": column})
                     ),
                     "results": facet_results_values,
                     "truncated": len(facet_rows_results) > facet_size,
@@ -237,14 +241,17 @@ class ColumnFacet(Facet):
                 else:
                     expanded = {}
                 for row in facet_rows:
-                    selected = (column, str(row["value"])) in qs_pairs
+                    column_qs = column
+                    if column.startswith("_"):
+                        column_qs = "{}__exact".format(column)
+                    selected = (column_qs, str(row["value"])) in qs_pairs
                     if selected:
                         toggle_path = path_with_removed_args(
-                            self.request, {column: str(row["value"])}
+                            self.request, {column_qs: str(row["value"])}
                         )
                     else:
                         toggle_path = path_with_added_args(
-                            self.request, {column: row["value"]}
+                            self.request, {column_qs: row["value"]}
                         )
                     facet_results_values.append(
                         {
@@ -252,7 +259,7 @@ class ColumnFacet(Facet):
                             "label": expanded.get((column, row["value"]), row["value"]),
                             "count": row["count"],
                             "toggle_url": self.ds.absolute_url(
-                                self.request, toggle_path
+                                self.request, self.ds.urls.path(toggle_path)
                             ),
                             "selected": selected,
                         }
@@ -331,8 +338,10 @@ class ArrayFacet(Facet):
                                 "type": "array",
                                 "toggle_url": self.ds.absolute_url(
                                     self.request,
-                                    path_with_added_args(
-                                        self.request, {"_facet_array": column}
+                                    self.ds.urls.path(
+                                        path_with_added_args(
+                                            self.request, {"_facet_array": column}
+                                        )
                                     ),
                                 ),
                             }
@@ -351,11 +360,26 @@ class ArrayFacet(Facet):
             config = source_and_config["config"]
             source = source_and_config["source"]
             column = config.get("column") or config["simple"]
+            # https://github.com/simonw/datasette/issues/448
             facet_sql = """
-                select j.value as value, count(*) as count from (
-                    {sql}
-                ) join json_each({col}) j
-                group by j.value order by count desc, value limit {limit}
+                with inner as ({sql}),
+                deduped_array_items as (
+                    select
+                        distinct j.value,
+                        inner.*
+                    from
+                        json_each([inner].{col}) j
+                        join inner
+                )
+                select
+                    value as value,
+                    count(*) as count
+                from
+                    deduped_array_items
+                group by
+                    value
+                order by
+                    count(*) desc, value limit {limit}
             """.format(
                 col=escape_sqlite(column), sql=self.sql, limit=facet_size + 1
             )
@@ -373,8 +397,8 @@ class ArrayFacet(Facet):
                     "type": self.type,
                     "results": facet_results_values,
                     "hideable": source != "metadata",
-                    "toggle_url": path_with_removed_args(
-                        self.request, {"_facet_array": column}
+                    "toggle_url": self.ds.urls.path(
+                        path_with_removed_args(self.request, {"_facet_array": column})
                     ),
                     "truncated": len(facet_rows_results) > facet_size,
                 }
@@ -443,8 +467,10 @@ class DateFacet(Facet):
                             "type": "date",
                             "toggle_url": self.ds.absolute_url(
                                 self.request,
-                                path_with_added_args(
-                                    self.request, {"_facet_date": column}
+                                self.ds.urls.path(
+                                    path_with_added_args(
+                                        self.request, {"_facet_date": column}
+                                    )
                                 ),
                             ),
                         }

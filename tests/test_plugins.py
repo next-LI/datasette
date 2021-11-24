@@ -437,7 +437,7 @@ def test_hook_register_output_renderer_all_parameters(app_client):
             "on_earth",
             "state",
             "city_id",
-            "neighborhood",
+            "_neighborhood",
             "tags",
             "complex_array",
             "distinct_some_null",
@@ -459,11 +459,11 @@ def test_hook_register_output_renderer_all_parameters(app_client):
             "<sqlite3.Row object at 0xXXX>",
             "<sqlite3.Row object at 0xXXX>",
         ],
-        "sql": "select pk, created, planet_int, on_earth, state, city_id, neighborhood, tags, complex_array, distinct_some_null from facetable order by pk limit 51",
+        "sql": "select pk, created, planet_int, on_earth, state, city_id, _neighborhood, tags, complex_array, distinct_some_null from facetable order by pk limit 51",
         "query_name": None,
         "database": "fixtures",
         "table": "facetable",
-        "request": "<datasette.utils.asgi.Request object at 0xXXX>",
+        "request": '<asgi.Request method="GET" url="http://localhost/fixtures/facetable.testall">',
         "view_name": "table",
         "1+1": 2,
     }
@@ -526,12 +526,12 @@ def test_hook_register_output_renderer_can_render(app_client):
             "on_earth",
             "state",
             "city_id",
-            "neighborhood",
+            "_neighborhood",
             "tags",
             "complex_array",
             "distinct_some_null",
         ],
-        "sql": "select pk, created, planet_int, on_earth, state, city_id, neighborhood, tags, complex_array, distinct_some_null from facetable order by pk limit 51",
+        "sql": "select pk, created, planet_int, on_earth, state, city_id, _neighborhood, tags, complex_array, distinct_some_null from facetable order by pk limit 51",
         "query_name": None,
         "database": "fixtures",
         "table": "facetable",
@@ -676,6 +676,25 @@ def test_hook_register_routes_with_datasette(configured_path):
         # Other one should 404
         other_path = [p for p in ("path1", "path2") if configured_path != p][0]
         assert client.get(f"/{other_path}/", follow_redirects=True).status == 404
+
+
+def test_hook_register_routes_override():
+    "Plugins can over-ride default paths such as /db/table"
+    with make_app_client(
+        metadata={
+            "plugins": {
+                "register-route-demo": {
+                    "path": "blah",
+                }
+            }
+        }
+    ) as client:
+        response = client.get("/db/table")
+        assert response.status == 200
+        assert (
+            response.text
+            == "/db/table: [('db_name', 'db'), ('table_and_format', 'table')]"
+        )
 
 
 def test_hook_register_routes_post(app_client):

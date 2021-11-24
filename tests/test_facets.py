@@ -4,6 +4,7 @@ from datasette.facets import ColumnFacet, ArrayFacet, DateFacet
 from datasette.utils.asgi import Request
 from datasette.utils import detect_json1
 from .fixtures import app_client  # noqa
+import json
 import pytest
 
 
@@ -23,7 +24,10 @@ async def test_column_facet_suggest(app_client):
         {"name": "on_earth", "toggle_url": "http://localhost/?_facet=on_earth"},
         {"name": "state", "toggle_url": "http://localhost/?_facet=state"},
         {"name": "city_id", "toggle_url": "http://localhost/?_facet=city_id"},
-        {"name": "neighborhood", "toggle_url": "http://localhost/?_facet=neighborhood"},
+        {
+            "name": "_neighborhood",
+            "toggle_url": "http://localhost/?_facet=_neighborhood",
+        },
         {"name": "tags", "toggle_url": "http://localhost/?_facet=tags"},
         {
             "name": "complex_array",
@@ -56,8 +60,8 @@ async def test_column_facet_suggest_skip_if_already_selected(app_client):
             "toggle_url": "http://localhost/?_facet=planet_int&_facet=on_earth&_facet=city_id",
         },
         {
-            "name": "neighborhood",
-            "toggle_url": "http://localhost/?_facet=planet_int&_facet=on_earth&_facet=neighborhood",
+            "name": "_neighborhood",
+            "toggle_url": "http://localhost/?_facet=planet_int&_facet=on_earth&_facet=_neighborhood",
         },
         {
             "name": "tags",
@@ -86,7 +90,7 @@ async def test_column_facet_suggest_skip_if_enabled_by_metadata(app_client):
         "planet_int",
         "on_earth",
         "state",
-        "neighborhood",
+        "_neighborhood",
         "tags",
         "complex_array",
     ] == suggestions
@@ -142,6 +146,128 @@ async def test_column_facet_results(app_client):
             "truncated": False,
         }
     } == buckets
+
+
+@pytest.mark.asyncio
+async def test_column_facet_results_column_starts_with_underscore(app_client):
+    facet = ColumnFacet(
+        app_client.ds,
+        Request.fake("/?_facet=_neighborhood"),
+        database="fixtures",
+        sql="select * from facetable",
+        table="facetable",
+    )
+    buckets, timed_out = await facet.facet_results()
+    assert [] == timed_out
+    assert buckets == {
+        "_neighborhood": {
+            "name": "_neighborhood",
+            "type": "column",
+            "hideable": True,
+            "toggle_url": "/",
+            "results": [
+                {
+                    "value": "Downtown",
+                    "label": "Downtown",
+                    "count": 2,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Downtown",
+                    "selected": False,
+                },
+                {
+                    "value": "Arcadia Planitia",
+                    "label": "Arcadia Planitia",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Arcadia+Planitia",
+                    "selected": False,
+                },
+                {
+                    "value": "Bernal Heights",
+                    "label": "Bernal Heights",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Bernal+Heights",
+                    "selected": False,
+                },
+                {
+                    "value": "Corktown",
+                    "label": "Corktown",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Corktown",
+                    "selected": False,
+                },
+                {
+                    "value": "Dogpatch",
+                    "label": "Dogpatch",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Dogpatch",
+                    "selected": False,
+                },
+                {
+                    "value": "Greektown",
+                    "label": "Greektown",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Greektown",
+                    "selected": False,
+                },
+                {
+                    "value": "Hayes Valley",
+                    "label": "Hayes Valley",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Hayes+Valley",
+                    "selected": False,
+                },
+                {
+                    "value": "Hollywood",
+                    "label": "Hollywood",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Hollywood",
+                    "selected": False,
+                },
+                {
+                    "value": "Koreatown",
+                    "label": "Koreatown",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Koreatown",
+                    "selected": False,
+                },
+                {
+                    "value": "Los Feliz",
+                    "label": "Los Feliz",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Los+Feliz",
+                    "selected": False,
+                },
+                {
+                    "value": "Mexicantown",
+                    "label": "Mexicantown",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Mexicantown",
+                    "selected": False,
+                },
+                {
+                    "value": "Mission",
+                    "label": "Mission",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Mission",
+                    "selected": False,
+                },
+                {
+                    "value": "SOMA",
+                    "label": "SOMA",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=SOMA",
+                    "selected": False,
+                },
+                {
+                    "value": "Tenderloin",
+                    "label": "Tenderloin",
+                    "count": 1,
+                    "toggle_url": "http://localhost/?_facet=_neighborhood&_neighborhood__exact=Tenderloin",
+                    "selected": False,
+                },
+            ],
+            "truncated": False,
+        }
+    }
 
 
 @pytest.mark.asyncio
@@ -275,6 +401,63 @@ async def test_array_facet_results(app_client):
             "truncated": False,
         }
     } == buckets
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not detect_json1(), reason="Requires the SQLite json1 module")
+async def test_array_facet_handle_duplicate_tags():
+    ds = Datasette([], memory=True)
+    db = ds.add_database(Database(ds, memory_name="test_array_facet"))
+    await db.execute_write("create table otters(name text, tags text)", block=True)
+    for name, tags in (
+        ("Charles", ["friendly", "cunning", "friendly"]),
+        ("Shaun", ["cunning", "empathetic", "friendly"]),
+        ("Tracy", ["empathetic", "eager"]),
+    ):
+        await db.execute_write(
+            "insert into otters (name, tags) values (?, ?)",
+            [name, json.dumps(tags)],
+            block=True,
+        )
+
+    response = await ds.client.get("/test_array_facet/otters.json?_facet_array=tags")
+    assert response.json()["facet_results"]["tags"] == {
+        "name": "tags",
+        "type": "array",
+        "results": [
+            {
+                "value": "cunning",
+                "label": "cunning",
+                "count": 2,
+                "toggle_url": "http://localhost/test_array_facet/otters.json?_facet_array=tags&tags__arraycontains=cunning",
+                "selected": False,
+            },
+            {
+                "value": "empathetic",
+                "label": "empathetic",
+                "count": 2,
+                "toggle_url": "http://localhost/test_array_facet/otters.json?_facet_array=tags&tags__arraycontains=empathetic",
+                "selected": False,
+            },
+            {
+                "value": "friendly",
+                "label": "friendly",
+                "count": 2,
+                "toggle_url": "http://localhost/test_array_facet/otters.json?_facet_array=tags&tags__arraycontains=friendly",
+                "selected": False,
+            },
+            {
+                "value": "eager",
+                "label": "eager",
+                "count": 1,
+                "toggle_url": "http://localhost/test_array_facet/otters.json?_facet_array=tags&tags__arraycontains=eager",
+                "selected": False,
+            },
+        ],
+        "hideable": True,
+        "toggle_url": "/test_array_facet/otters.json",
+        "truncated": False,
+    }
 
 
 @pytest.mark.asyncio
